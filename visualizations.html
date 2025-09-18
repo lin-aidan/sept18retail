@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Retail Sales Visualizations</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 500px; width: 100%; margin-bottom: 40px; }
+        #linechart { height: 500px; width: 100%; }
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h2 { margin-top: 40px; }
+    </style>
+</head>
+<body>
+    <h1>Retail Sales Visualizations</h1>
+    <h2>Sales by Country</h2>
+    <div id="map"></div>
+    <h2>Running Total of Sales Each Day</h2>
+    <div id="linechart"></div>
+    <script>
+        // Load country sales data and running total sales data
+        Promise.all([
+            fetch('country_sales.json').then(r => r.json()),
+            fetch('running_total_sales.json').then(r => r.json())
+        ]).then(([countrySales, runningTotalData]) => {
+            // Load world geojson
+            fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
+                .then(r => r.json())
+                .then(worldGeoJson => {
+                    const map = L.map('map').setView([20, 0], 2);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 5,
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(map);
+
+                    // Build a lookup for sales by country name
+                    const salesLookup = {};
+                    countrySales.forEach(row => {
+                        salesLookup[row.Country] = row.NumberOfSales;
+                    });
+
+                    // Style function for countries
+                    function style(feature) {
+                        const name = feature.properties.name;
+                        const sales = salesLookup[name] || 0;
+                        let fillColor = 'grey';
+                        if (sales > 10000) fillColor = 'red';
+                        else if (sales > 0) fillColor = 'white';
+                        return {
+                            fillColor,
+                            weight: 1,
+                            opacity: 1,
+                            color: 'black',
+                            fillOpacity: 0.7
+                        };
+                    }
+
+                    // Add countries to map
+                    L.geoJson(worldGeoJson, {
+                        style,
+                        onEachFeature: function (feature, layer) {
+                            const name = feature.properties.name;
+                            const sales = salesLookup[name] || 0;
+                            layer.bindPopup(`<b>${name}</b><br>Sales: ${sales}`);
+                        }
+                    }).addTo(map);
+                });
+
+            // Line chart for running total sales (date only)
+            Plotly.newPlot('linechart', [{
+                x: runningTotalData.dates,
+                y: runningTotalData.running_totals,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Running Total Sales',
+                line: { color: 'blue' }
+            }], {
+                title: 'Running Total of Sales Each Day',
+                xaxis: { title: 'Date' },
+                yaxis: { title: 'Running Total Sales' }
+            });
+        });
+    </script>
+</body>
+</html>
